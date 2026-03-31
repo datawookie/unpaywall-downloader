@@ -1,0 +1,20 @@
+[project]
+name = "unpaywall-downloader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "camoufox>=0.4.11",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["unpaywall"]
+
+[project.scripts]
+unpaywall = "unpaywall:main"
