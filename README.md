@@ -16,9 +16,11 @@ To install the CLI for your own user account so you can run `unpaywall`
 directly from anywhere:
 
 ```bash
-uv tool install --editable .
+uv tool install .
 uv tool update-shell
 ```
+
+This is the recommended installation method for normal usage.
 
 After opening a new shell, the command is available as:
 
