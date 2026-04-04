@@ -1,6 +1,6 @@
 [project]
 name = "unpaywall-downloader"
-version = "0.1.0"
+version = "0.0.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -15,6 +15,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["unpaywall"]
+
+[dependency-groups]
+dev = [
+    "bump2version>=1.0.1",
+]
 
 [project.scripts]
 unpaywall = "unpaywall:main"

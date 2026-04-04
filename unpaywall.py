@@ -32,6 +32,8 @@ try:
 except ImportError:
     CAMOUFOX_AVAILABLE = False
 
+VERSION = "0.0.1"
+
 def sanitize_filename(doi: str) -> str:
     """Turn DOI into a safe filename."""
     filename = doi.replace("/", "+")
@@ -137,7 +139,11 @@ def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: 
                 "doi": doi, "pdf_url": pdf_url}
 
 def main():
-    parser = argparse.ArgumentParser(description="Download open-access PDFs via Unpaywall (httpx + Camoufox backup). --email is optional (falls back to UNPAYWALL_EMAIL env var).")
+    parser = argparse.ArgumentParser(
+        description=(
+            f"Unpaywall PDF Downloader v{VERSION}. Download open-access PDFs."
+        )
+    )
     parser.add_argument("--doi", action="append", required=True,
                         help="DOI of the article (repeat this flag for batch mode)")
     parser.add_argument("--output", "-o", help="For single DOI: exact output filename. For batch: output directory.")
@@ -145,6 +151,8 @@ def main():
                         help="Your email for Unpaywall API (optional – falls back to UNPAYWALL_EMAIL environment variable)")
     parser.add_argument("--force-camoufox", action="store_true",
                         help="Skip httpx and use Camoufox immediately (for testing)")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}",
+                        help="Show the installed version and exit")
     args = parser.parse_args()
 
     # Get email: CLI flag first, then environment variable
