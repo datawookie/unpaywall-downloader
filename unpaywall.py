@@ -34,7 +34,9 @@ except ImportError:
 
 def sanitize_filename(doi: str) -> str:
     """Turn DOI into a safe filename."""
-    return re.sub(r'[^a-zA-Z0-9.-]', '_', doi) + ".pdf"
+    filename = doi.replace("/", "+")
+    filename = re.sub(r"[^a-zA-Z0-9.+-]+", "-", filename)
+    return filename + ".pdf"
 
 def download_with_httpx(pdf_url: str, headers: dict, output_path: Path):
     """Primary fast download using httpx (streaming for large PDFs)."""
