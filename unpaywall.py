@@ -32,7 +32,7 @@ try:
 except ImportError:
     CAMOUFOX_AVAILABLE = False
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 def sanitize_filename(doi: str) -> str:
     """Turn DOI into a safe filename."""
