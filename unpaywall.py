@@ -33,7 +33,7 @@ try:
 except ImportError:
     CAMOUFOX_AVAILABLE = False
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 RETRY_DELAYS = [1.0, 2.0]
 
 
