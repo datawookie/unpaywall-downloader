@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -33,6 +34,7 @@ except ImportError:
     CAMOUFOX_AVAILABLE = False
 
 VERSION = "0.0.2"
+RETRY_DELAYS = [1.0, 2.0]
 
 
 def eprint(*args, quiet: bool = False, **kwargs):
@@ -54,23 +56,37 @@ def sanitize_filename(doi: str) -> str:
     filename = re.sub(r"[^a-zA-Z0-9.+-]+", "-", filename)
     return filename + ".pdf"
 
-def download_with_httpx(pdf_url: str, headers: dict, output_path: Path):
-    """Primary fast download using httpx (streaming for large PDFs)."""
-    with httpx.stream(
-        "GET",
-        pdf_url,
-        headers=headers,
-        timeout=30.0,
-        follow_redirects=True,
-    ) as response:
-        response.raise_for_status()
-        with open(output_path, "wb") as f:
-            for chunk in response.iter_bytes(chunk_size=8192):
-                f.write(chunk)
-    if not _is_valid_pdf(output_path):
-        output_path.unlink(missing_ok=True)
-        raise ValueError("Downloaded file is not a valid PDF (got HTML or error page)")
-    return True
+def download_with_httpx(pdf_url: str, headers: dict, output_path: Path, quiet: bool = False):
+    """Primary fast download using httpx (streaming for large PDFs), with retry."""
+    last_exc = None
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            with httpx.stream(
+                "GET",
+                pdf_url,
+                headers=headers,
+                timeout=30.0,
+                follow_redirects=True,
+            ) as response:
+                response.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in response.iter_bytes(chunk_size=8192):
+                        f.write(chunk)
+            if not _is_valid_pdf(output_path):
+                output_path.unlink(missing_ok=True)
+                raise ValueError("Downloaded file is not a valid PDF (got HTML or error page)")
+            return True
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last_exc = e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code >= 500:
+                last_exc = e
+            else:
+                raise
+        if attempt < len(RETRY_DELAYS):
+            eprint(f"  ↻ Retry {attempt + 1}/{len(RETRY_DELAYS)} after transient error...", quiet=quiet)
+            time.sleep(RETRY_DELAYS[attempt])
+    raise last_exc
 
 def download_with_camoufox(pdf_url: str, output_path: Path, quiet: bool = False):
     """Stealth fallback using Camoufox (anti-detect Firefox + Playwright)."""
@@ -130,7 +146,7 @@ def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: 
     # PRIMARY: httpx
     if not force_camoufox:
         try:
-            success = download_with_httpx(pdf_url, headers, final_path)
+            success = download_with_httpx(pdf_url, headers, final_path, quiet)
         except Exception as e:
             error_msg = f"httpx failed: {e}"
 
