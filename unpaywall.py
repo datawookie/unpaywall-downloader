@@ -34,6 +34,12 @@ except ImportError:
 
 VERSION = "0.0.2"
 
+
+def eprint(*args, quiet: bool = False, **kwargs):
+    if not quiet:
+        print(*args, file=sys.stderr, **kwargs)
+
+
 def sanitize_filename(doi: str) -> str:
     """Turn DOI into a safe filename."""
     filename = doi.replace("/", "+")
@@ -55,30 +61,31 @@ def download_with_httpx(pdf_url: str, headers: dict, output_path: Path):
                 f.write(chunk)
     return True
 
-def download_with_camoufox(pdf_url: str, output_path: Path):
+def download_with_camoufox(pdf_url: str, output_path: Path, quiet: bool = False):
     """Stealth fallback using Camoufox (anti-detect Firefox + Playwright)."""
     if not CAMOUFOX_AVAILABLE:
         raise ImportError("Camoufox not installed. Run: pip install camoufox[geoip]")
 
-    print("🔄 httpx failed → falling back to Camoufox (stealth browser)...")
+    eprint("🔄 httpx failed → falling back to Camoufox (stealth browser)...", quiet=quiet)
     with Camoufox(headless=True) as browser:
         page = browser.new_page()
         response = page.request.get(pdf_url, timeout=60000)
         if not response.ok:
             raise Exception(f"Camoufox request failed: {response.status} {response.text()[:200]}")
-        
+
         with open(output_path, "wb") as f:
             f.write(response.body())
     return True
 
-def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: bool = False):
+def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: bool = False,
+                 quiet: bool = False):
     # Clean DOI
     doi = doi.strip().lower().replace("https://doi.org/", "").replace("doi.org/", "")
 
     # Query Unpaywall API
     api_url = f"https://api.unpaywall.org/v2/{doi}?email={email}"
     headers = {"User-Agent": f"UnpaywallDownloader/3.2-optional-email ({email})"}
-    
+
     try:
         api_resp = httpx.get(api_url, headers=headers, timeout=15.0, follow_redirects=True)
         api_resp.raise_for_status()
@@ -117,7 +124,7 @@ def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: 
     if not success:
         if CAMOUFOX_AVAILABLE or force_camoufox:
             try:
-                success = download_with_camoufox(pdf_url, final_path)
+                success = download_with_camoufox(pdf_url, final_path, quiet)
                 method_used = "camoufox"
             except Exception as e:
                 error_msg = f"Camoufox fallback also failed: {e}"
@@ -151,6 +158,8 @@ def main():
                         help="Your email for Unpaywall API (optional – falls back to UNPAYWALL_EMAIL environment variable)")
     parser.add_argument("--force-camoufox", action="store_true",
                         help="Skip httpx and use Camoufox immediately (for testing)")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                        help="Suppress progress output; JSON still goes to stdout")
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}",
                         help="Show the installed version and exit")
     args = parser.parse_args()
@@ -168,10 +177,11 @@ def main():
 
     results = []
     success_count = 0
+    quiet = args.quiet
 
     for i, doi in enumerate(dois, 1):
-        print(f"\n[{i}/{len(dois)}] Processing DOI: {doi}")
-        
+        eprint(f"\n[{i}/{len(dois)}] Processing DOI: {doi}", quiet=quiet)
+
         # Smart output handling
         if len(dois) == 1 and args.output:
             out_path = args.output
@@ -180,21 +190,22 @@ def main():
         else:
             out_path = None  # auto-name in current dir
 
-        result = download_pdf(doi, email, str(out_path) if out_path else None, args.force_camoufox)
+        result = download_pdf(doi, email, str(out_path) if out_path else None, args.force_camoufox,
+                              quiet)
         results.append(result)
 
         if result["success"]:
             success_count += 1
-            print(f"✅ Success via {result['method']}: {result['file_path']}")
+            eprint(f"✅ Success via {result['method']}: {result['file_path']}", quiet=quiet)
         else:
-            print(f"❌ Failed: {result['error']}")
+            eprint(f"❌ Failed: {result['error']}", quiet=quiet)
             if "landing_page" in result:
-                print(f"   Landing page: {result['landing_page']}")
+                eprint(f"   Landing page: {result['landing_page']}", quiet=quiet)
 
     # Batch summary
-    print("\n" + "="*60)
-    print(f"BATCH SUMMARY: {success_count}/{len(dois)} PDFs downloaded successfully")
-    print("="*60)
+    eprint("\n" + "="*60, quiet=quiet)
+    eprint(f"BATCH SUMMARY: {success_count}/{len(dois)} PDFs downloaded successfully", quiet=quiet)
+    eprint("="*60, quiet=quiet)
 
     # Structured output for AI agents
     print(json.dumps({"results": results}, indent=2))
