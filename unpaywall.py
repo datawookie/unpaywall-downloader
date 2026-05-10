@@ -40,6 +40,14 @@ def eprint(*args, quiet: bool = False, **kwargs):
         print(*args, file=sys.stderr, **kwargs)
 
 
+def _is_valid_pdf(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(4) == b"%PDF"
+    except OSError:
+        return False
+
+
 def sanitize_filename(doi: str) -> str:
     """Turn DOI into a safe filename."""
     filename = doi.replace("/", "+")
@@ -59,6 +67,9 @@ def download_with_httpx(pdf_url: str, headers: dict, output_path: Path):
         with open(output_path, "wb") as f:
             for chunk in response.iter_bytes(chunk_size=8192):
                 f.write(chunk)
+    if not _is_valid_pdf(output_path):
+        output_path.unlink(missing_ok=True)
+        raise ValueError("Downloaded file is not a valid PDF (got HTML or error page)")
     return True
 
 def download_with_camoufox(pdf_url: str, output_path: Path, quiet: bool = False):
@@ -75,6 +86,9 @@ def download_with_camoufox(pdf_url: str, output_path: Path, quiet: bool = False)
 
         with open(output_path, "wb") as f:
             f.write(response.body())
+    if not _is_valid_pdf(output_path):
+        output_path.unlink(missing_ok=True)
+        raise ValueError("Downloaded file is not a valid PDF (got HTML or error page)")
     return True
 
 def download_pdf(doi: str, email: str, output_path: str = None, force_camoufox: bool = False,
