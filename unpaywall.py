@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unpaywall PDF Downloader with httpx Primary + Camoufox Stealth Backup
-Supports multiple DOIs via repeated --doi flag.
+Supports multiple DOIs via repeated --doi flag or --doi-file.
 --email is now optional (falls back to UNPAYWALL_EMAIL environment variable).
 
 Usage examples:
@@ -165,8 +165,10 @@ def main():
             f"Unpaywall PDF Downloader v{VERSION}. Download open-access PDFs."
         )
     )
-    parser.add_argument("--doi", action="append", required=True,
-                        help="DOI of the article (repeat this flag for batch mode)")
+    parser.add_argument("--doi", action="append", default=[],
+                        help="DOI of the article (repeat for batch; or use --doi-file)")
+    parser.add_argument("--doi-file", metavar="PATH",
+                        help="Text file of DOIs, one per line (# lines ignored)")
     parser.add_argument("--output", "-o", help="For single DOI: exact output filename. For batch: output directory.")
     parser.add_argument("--email", "-e", required=False,
                         help="Your email for Unpaywall API (optional – falls back to UNPAYWALL_EMAIL environment variable)")
@@ -184,9 +186,21 @@ def main():
         print("Error: --email flag or UNPAYWALL_EMAIL environment variable is required", file=sys.stderr)
         sys.exit(1)
 
-    dois = [d.strip() for d in args.doi if d.strip()]
+    dois_from_file = []
+    if args.doi_file:
+        try:
+            text = Path(args.doi_file).read_text()
+        except OSError as e:
+            print(f"Error reading --doi-file: {e}", file=sys.stderr)
+            sys.exit(1)
+        dois_from_file = [
+            line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    dois = [d.strip() for d in (args.doi or []) + dois_from_file if d.strip()]
     if not dois:
-        print("Error: At least one --doi is required", file=sys.stderr)
+        print("Error: at least one --doi or a non-empty --doi-file is required", file=sys.stderr)
         sys.exit(1)
 
     results = []
@@ -197,10 +211,12 @@ def main():
         eprint(f"\n[{i}/{len(dois)}] Processing DOI: {doi}", quiet=quiet)
 
         # Smart output handling
-        if len(dois) == 1 and args.output:
-            out_path = args.output
-        elif len(dois) > 1 and args.output:
-            out_path = Path(args.output) / sanitize_filename(doi)
+        if args.output:
+            p = Path(args.output)
+            if p.is_dir() or args.output.endswith("/"):
+                out_path = p / sanitize_filename(doi)
+            else:
+                out_path = p if len(dois) == 1 else p / sanitize_filename(doi)
         else:
             out_path = None  # auto-name in current dir
 
